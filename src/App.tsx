@@ -245,7 +245,7 @@ export function App() {
       {error && (
         <div className="app__status app__status--error">Error: {error}</div>
       )}
-      {data && <ServiceMatrix offeringState={data} />}
+      {data && <ServiceMatrix offeringState={data} serviceOfferingId={serviceOfferingId} graphqlUrl={graphqlUrl} />}
       {!data && !loading && !error && (
         <div className="app__status">
           Click "Fetch" to load the service offering.

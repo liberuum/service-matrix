@@ -30,11 +30,23 @@ const SERVICE_LEVELS = [
   { value: "VARIABLE", shortLabel: "#", color: "#7c3aed" },
 ] as const;
 
+const CREATE_PRODUCT_INSTANCES_MUTATION = `
+mutation CreateProductInstances($input: CreateProductInstancesInput!) {
+  createProductInstances(input: $input) {
+    success
+    data
+    errors
+  }
+}
+`;
+
 interface ServiceMatrixProps {
   offeringState: ServiceOfferingState;
+  serviceOfferingId: string;
+  graphqlUrl: string;
 }
 
-export function ServiceMatrix({ offeringState }: ServiceMatrixProps) {
+export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: ServiceMatrixProps) {
   const services = offeringState.services ?? [];
   const tiers = offeringState.tiers ?? [];
   const optionGroups = offeringState.optionGroups ?? [];
@@ -67,6 +79,18 @@ export function ServiceMatrix({ offeringState }: ServiceMatrixProps) {
     Record<string, BillingCycle>
   >({});
 
+  // Purchase modal state
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [purchaseName, setPurchaseName] = useState("");
+  const [purchaseTeamName, setPurchaseTeamName] = useState("");
+  const [purchaseEmail, setPurchaseEmail] = useState("");
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchaseResult, setPurchaseResult] = useState<{
+    success: boolean;
+    linkToDrive?: string;
+    errors?: string[];
+  } | null>(null);
+
   const isCustomBillingMode = useMemo(() => {
     const overrides = Object.values(groupBillingCycles);
     if (overrides.length === 0) return false;
@@ -85,6 +109,80 @@ export function ServiceMatrix({ offeringState }: ServiceMatrixProps) {
       else next.add(groupId);
       return next;
     });
+  }, []);
+
+  const handlePurchaseSubmit = useCallback(async () => {
+    setPurchaseLoading(true);
+    setPurchaseResult(null);
+    try {
+      const selectedTier = tiers[selectedTierIdx];
+      const input = {
+        serviceOfferingId,
+        name: purchaseName,
+        teamName: purchaseTeamName,
+        customerEmail: purchaseEmail,
+        userSelection: {
+          tierId: selectedTier?.id ?? "",
+          billingCycle: activeBillingCycle,
+          optionGroupIds: [...enabledOptionalGroups],
+          groupBillingCycleOverrides: Object.entries(groupBillingCycles).map(
+            ([groupId, billingCycle]) => ({ groupId, billingCycle }),
+          ),
+          addonBillingCycleOverrides: Object.entries(addonBillingCycles).map(
+            ([groupId, billingCycle]) => ({ groupId, billingCycle }),
+          ),
+        },
+      };
+      const res = await fetch(graphqlUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: CREATE_PRODUCT_INSTANCES_MUTATION,
+          variables: { input },
+        }),
+      });
+      const json = await res.json();
+      const result = json.data?.createProductInstances;
+      if (result?.success) {
+        const data = typeof result.data === "string" ? JSON.parse(result.data) : result.data;
+        setPurchaseResult({
+          success: true,
+          linkToDrive: data?.linkToDrive ?? data?.driveUrl ?? undefined,
+        });
+      } else {
+        setPurchaseResult({
+          success: false,
+          errors: result?.errors ?? json.errors?.map((e: { message: string }) => e.message) ?? ["Unknown error"],
+        });
+      }
+    } catch (err: unknown) {
+      setPurchaseResult({
+        success: false,
+        errors: [(err as Error).message || "Network error"],
+      });
+    } finally {
+      setPurchaseLoading(false);
+    }
+  }, [
+    serviceOfferingId,
+    graphqlUrl,
+    purchaseName,
+    purchaseTeamName,
+    purchaseEmail,
+    tiers,
+    selectedTierIdx,
+    activeBillingCycle,
+    enabledOptionalGroups,
+    groupBillingCycles,
+    addonBillingCycles,
+  ]);
+
+  const openPurchaseModal = useCallback(() => {
+    setPurchaseName("");
+    setPurchaseTeamName("");
+    setPurchaseEmail("");
+    setPurchaseResult(null);
+    setShowPurchaseModal(true);
   }, []);
 
   // Group classification
@@ -498,8 +596,131 @@ export function ServiceMatrix({ offeringState }: ServiceMatrixProps) {
     );
   };
 
+  const selectedTierName = tiers[selectedTierIdx]?.name ?? "—";
+  const enabledAddonNames = addonGroups
+    .filter((g) => enabledOptionalGroups.has(g.id))
+    .map((g) => g.name);
+
   return (
     <div className="matrix">
+      {/* Purchase Service Button */}
+      <div className="matrix__purchase-bar">
+        <button className="matrix__purchase-btn" onClick={openPurchaseModal}>
+          Purchase Service
+        </button>
+      </div>
+
+      {/* Purchase Modal */}
+      {showPurchaseModal && (
+        <div className="matrix__modal-overlay" onClick={() => !purchaseLoading && setShowPurchaseModal(false)}>
+          <div className="matrix__modal" onClick={(e) => e.stopPropagation()}>
+            {purchaseResult?.success ? (
+              <>
+                <h2 className="matrix__modal-title">Purchase Successful</h2>
+                <div className="matrix__modal-success">
+                  <p>Your service has been provisioned successfully.</p>
+                  {purchaseResult.linkToDrive && (
+                    <a
+                      href={purchaseResult.linkToDrive}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="matrix__modal-drive-link"
+                    >
+                      Open Drive
+                    </a>
+                  )}
+                </div>
+                <div className="matrix__modal-actions">
+                  <button
+                    className="matrix__modal-btn matrix__modal-btn--secondary"
+                    onClick={() => setShowPurchaseModal(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="matrix__modal-title">Purchase Service</h2>
+
+                <div className="matrix__modal-summary">
+                  <div className="matrix__modal-summary-row">
+                    <span className="matrix__modal-summary-label">Tier</span>
+                    <span className="matrix__modal-summary-value">{selectedTierName}</span>
+                  </div>
+                  <div className="matrix__modal-summary-row">
+                    <span className="matrix__modal-summary-label">Billing Cycle</span>
+                    <span className="matrix__modal-summary-value">{BILLING_CYCLE_LABELS[activeBillingCycle]}</span>
+                  </div>
+                  {enabledAddonNames.length > 0 && (
+                    <div className="matrix__modal-summary-row">
+                      <span className="matrix__modal-summary-label">Add-ons</span>
+                      <span className="matrix__modal-summary-value">{enabledAddonNames.join(", ")}</span>
+                    </div>
+                  )}
+                </div>
+
+                <label className="matrix__modal-label">
+                  Name
+                  <input
+                    className="matrix__modal-input"
+                    type="text"
+                    value={purchaseName}
+                    onChange={(e) => setPurchaseName(e.target.value)}
+                    disabled={purchaseLoading}
+                  />
+                </label>
+                <label className="matrix__modal-label">
+                  Team Name
+                  <input
+                    className="matrix__modal-input"
+                    type="text"
+                    value={purchaseTeamName}
+                    onChange={(e) => setPurchaseTeamName(e.target.value)}
+                    disabled={purchaseLoading}
+                  />
+                </label>
+                <label className="matrix__modal-label">
+                  Customer Email
+                  <input
+                    className="matrix__modal-input"
+                    type="email"
+                    value={purchaseEmail}
+                    onChange={(e) => setPurchaseEmail(e.target.value)}
+                    disabled={purchaseLoading}
+                  />
+                </label>
+
+                {purchaseResult?.errors && (
+                  <div className="matrix__modal-errors">
+                    {purchaseResult.errors.map((err, i) => (
+                      <p key={i}>{err}</p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="matrix__modal-actions">
+                  <button
+                    className="matrix__modal-btn matrix__modal-btn--secondary"
+                    onClick={() => setShowPurchaseModal(false)}
+                    disabled={purchaseLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="matrix__modal-btn matrix__modal-btn--primary"
+                    onClick={handlePurchaseSubmit}
+                    disabled={purchaseLoading || !purchaseName.trim() || !purchaseEmail.trim()}
+                  >
+                    {purchaseLoading ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Billing Cycle Selector */}
       <div className="matrix__billing-cycle-bar">
         <div className="matrix__billing-cycle-tabs">

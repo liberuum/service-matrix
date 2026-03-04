@@ -1,7 +1,11 @@
-import { serve } from "bun";
+import { serve, argv } from "bun";
 import index from "./index.html";
 
+const portFlag = argv.indexOf("--port");
+const port = portFlag !== -1 ? Number(argv[portFlag + 1]) : undefined;
+
 const server = serve({
+  port,
   routes: {
     // Serve index.html for all unmatched routes.
     "/*": index,
