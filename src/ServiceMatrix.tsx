@@ -111,6 +111,15 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
     });
   }, []);
 
+  // All non-addon group IDs (always included) + only toggled-on addon group IDs
+  const allSelectedGroupIds = useMemo(() => {
+    const nonAddonIds = optionGroups.filter((g) => !g.isAddOn).map((g) => g.id);
+    const addonIds = [...enabledOptionalGroups].filter((id) =>
+      optionGroups.some((g) => g.id === id && g.isAddOn),
+    );
+    return [...nonAddonIds, ...addonIds];
+  }, [optionGroups, enabledOptionalGroups]);
+
   const handlePurchaseSubmit = useCallback(async () => {
     setPurchaseLoading(true);
     setPurchaseResult(null);
@@ -124,7 +133,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
         userSelection: {
           tierId: selectedTier?.id ?? "",
           billingCycle: activeBillingCycle,
-          optionGroupIds: [...enabledOptionalGroups],
+          optionGroupIds: allSelectedGroupIds,
           groupBillingCycleOverrides: Object.entries(groupBillingCycles).map(
             ([groupId, billingCycle]) => ({ groupId, billingCycle }),
           ),
@@ -172,7 +181,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
     tiers,
     selectedTierIdx,
     activeBillingCycle,
-    enabledOptionalGroups,
+    allSelectedGroupIds,
     groupBillingCycles,
     addonBillingCycles,
   ]);
@@ -244,12 +253,11 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
 
   // Precompute price breakdowns for all tiers
   const tierBreakdowns = useMemo((): PriceBreakdown[] => {
-    const addonIds = [...enabledOptionalGroups];
     return tiers.map((tier) =>
       getUserSelectionPriceBreakdown(state, {
         tierId: tier.id,
         billingCycle: activeBillingCycle,
-        optionGroupIds: addonIds,
+        optionGroupIds: allSelectedGroupIds,
         groupBillingCycleOverrides: groupBillingCycles,
         addonBillingCycleOverrides: addonBillingCycles,
       }),
@@ -258,7 +266,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
     tiers,
     optionGroups,
     activeBillingCycle,
-    enabledOptionalGroups,
+    allSelectedGroupIds,
     groupBillingCycles,
     addonBillingCycles,
     state,
@@ -726,13 +734,12 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
         <div className="matrix__billing-cycle-tabs">
           {availableCycles.map((cycle) => {
             // Compute discount badge for this cycle
-            const addonIds = [...enabledOptionalGroups];
             let savingsPct = 0;
             if (cycle !== "MONTHLY" && tiers.length > 0) {
               const bd = getUserSelectionPriceBreakdown(state, {
                 tierId: tiers[selectedTierIdx]?.id ?? "",
                 billingCycle: cycle,
-                optionGroupIds: addonIds,
+                optionGroupIds: allSelectedGroupIds,
                 groupBillingCycleOverrides: {},
                 addonBillingCycleOverrides: {},
               });
