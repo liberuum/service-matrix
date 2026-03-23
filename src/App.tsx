@@ -4,7 +4,7 @@ import type { ServiceOfferingState } from "./types";
 import "./index.css";
 
 const DEFAULT_GRAPHQL_URL =
-  "http://localhost:4001/graphql/resources-services";
+  "http://localhost:4001/graphql";
 const DEFAULT_ID = "d57609a0-956e-457e-b460-021531c3ec18";
 
 const QUERY = `
