@@ -67,7 +67,8 @@ query ServiceOfferings($filter: RSServiceOfferingsFilter) {
         unitName
         freeLimit
         paidLimit
-        resetCycle
+        metricType
+        accrualCycle
         notes
         unitPrice
         unitPriceCurrency
