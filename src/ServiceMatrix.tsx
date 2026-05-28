@@ -21,6 +21,8 @@ import {
 
 const UNGROUPED_ID = "__ungrouped__";
 
+const ETHEREUM_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
+
 const SERVICE_LEVELS = [
   { value: "INCLUDED", shortLabel: "\u2713", color: "#059669" },
   { value: "OPTIONAL", shortLabel: "Optional", color: "#0284c7" },
@@ -84,6 +86,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
   const [purchaseName, setPurchaseName] = useState("");
   const [purchaseTeamName, setPurchaseTeamName] = useState("");
   const [purchaseEmail, setPurchaseEmail] = useState("");
+  const [purchaseEthereumAddress, setPurchaseEthereumAddress] = useState("");
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [purchaseResult, setPurchaseResult] = useState<{
     success: boolean;
@@ -130,6 +133,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
         name: purchaseName,
         teamName: purchaseTeamName,
         customerEmail: purchaseEmail,
+        ethereumAddress: purchaseEthereumAddress,
         userSelection: {
           tierId: selectedTier?.id ?? "",
           billingCycle: activeBillingCycle,
@@ -178,6 +182,7 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
     purchaseName,
     purchaseTeamName,
     purchaseEmail,
+    purchaseEthereumAddress,
     tiers,
     selectedTierIdx,
     activeBillingCycle,
@@ -190,9 +195,17 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
     setPurchaseName("");
     setPurchaseTeamName("");
     setPurchaseEmail("");
+    setPurchaseEthereumAddress("");
     setPurchaseResult(null);
     setShowPurchaseModal(true);
   }, []);
+
+  const isEthereumAddressValid = useMemo(
+    () => ETHEREUM_ADDRESS_REGEX.test(purchaseEthereumAddress.trim()),
+    [purchaseEthereumAddress],
+  );
+  const showEthereumAddressError =
+    purchaseEthereumAddress.length > 0 && !isEthereumAddressValid;
 
   // Group classification
   const setupGroups = useMemo(
@@ -698,6 +711,23 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
                     disabled={purchaseLoading}
                   />
                 </label>
+                <label className="matrix__modal-label">
+                  Ethereum Address
+                  <input
+                    className="matrix__modal-input"
+                    type="text"
+                    placeholder="0x..."
+                    value={purchaseEthereumAddress}
+                    onChange={(e) => setPurchaseEthereumAddress(e.target.value)}
+                    disabled={purchaseLoading}
+                    aria-invalid={showEthereumAddressError}
+                  />
+                  {showEthereumAddressError && (
+                    <span className="matrix__modal-field-error">
+                      Must be a 42-character address starting with 0x (e.g. 0x followed by 40 hex characters).
+                    </span>
+                  )}
+                </label>
 
                 {purchaseResult?.errors && (
                   <div className="matrix__modal-errors">
@@ -718,7 +748,12 @@ export function ServiceMatrix({ offeringState, serviceOfferingId, graphqlUrl }: 
                   <button
                     className="matrix__modal-btn matrix__modal-btn--primary"
                     onClick={handlePurchaseSubmit}
-                    disabled={purchaseLoading || !purchaseName.trim() || !purchaseEmail.trim()}
+                    disabled={
+                      purchaseLoading ||
+                      !purchaseName.trim() ||
+                      !purchaseEmail.trim() ||
+                      !isEthereumAddressValid
+                    }
                   >
                     {purchaseLoading ? "Submitting..." : "Submit"}
                   </button>

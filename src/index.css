@@ -812,6 +812,21 @@ body {
   color: var(--so-gray-400);
 }
 
+.matrix__modal-input[aria-invalid="true"] {
+  border-color: var(--so-red-600);
+}
+
+.matrix__modal-input[aria-invalid="true"]:focus {
+  border-color: var(--so-red-600);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.matrix__modal-field-error {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--so-red-600);
+}
+
 .matrix__modal-errors {
   background: var(--so-red-50);
   border: 1px solid #fecaca;
